@@ -350,16 +350,18 @@ function renderParticipants() {
 
   let rowsHtml = '';
   if (participants.length === 0) {
-    rowsHtml = `<tr><td colspan="4"><div class="empty-state">No submissions yet.</div></td></tr>`;
+    rowsHtml = `<tr><td colspan="5"><div class="empty-state">No submissions yet.</div></td></tr>`;
   } else {
     participants.forEach(p => {
       const complete = p.count >= EXPECTED_FACTS_PER_RESPONDENT;
+      const nameSafe = p.name.replace(/"/g, '&quot;');
       rowsHtml += `
-        <tr class="clickable" data-name="${p.name.replace(/"/g, '&quot;')}">
+        <tr class="clickable" data-name="${nameSafe}">
           <td>${p.name}</td>
           <td><span class="pill ${complete ? 'pill-ok' : 'pill-warn'}">${p.count} / ${EXPECTED_FACTS_PER_RESPONDENT}</span></td>
           <td>${fmtDate(p.firstSubmitted)}</td>
           <td>→</td>
+          <td><button class="row-delete-btn participant-delete-btn" data-name="${nameSafe}" title="Delete this participant's submission">✕</button></td>
         </tr>
       `;
     });
@@ -380,7 +382,7 @@ function renderParticipants() {
     ${avgGridsHtml}
     <div class="card" style="padding:0; overflow:hidden;">
       <table>
-        <thead><tr><th>Participant</th><th>Facts Answered</th><th>First Submitted</th><th></th></tr></thead>
+        <thead><tr><th>Participant</th><th>Facts Answered</th><th>First Submitted</th><th></th><th></th></tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table>
     </div>
@@ -396,7 +398,40 @@ function renderParticipants() {
       render();
     });
   });
+  document.querySelectorAll('.participant-delete-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteParticipant(btn.getAttribute('data-name'), btn.closest('tr'));
+    });
+  });
   attachDotTooltips();
+}
+
+// Deletes every answer belonging to one participant (matched by respondent_name)
+// from Supabase, then removes them from the local dataset and re-renders.
+// Requires a DELETE policy for the anon role on brutal_facts_scores in Supabase RLS.
+async function deleteParticipant(name, trEl) {
+  if (!confirm(`Delete all ${allRows.filter(r => r.respondent_name === name).length} answers from "${name}"? This cannot be undone.`)) return;
+  const btn = trEl.querySelector('.participant-delete-btn');
+  btn.disabled = true;
+  trEl.style.opacity = '0.4';
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/brutal_facts_scores?respondent_name=eq.${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'return=minimal'
+      }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    allRows = allRows.filter(r => r.respondent_name !== name);
+    render();
+  } catch (err) {
+    btn.disabled = false;
+    trEl.style.opacity = '1';
+    alert("Couldn't delete: " + err.message + "\n\nIf this says permission denied, Supabase needs a DELETE policy for the anon role on brutal_facts_scores.");
+  }
 }
 
 function renderDetail() {
