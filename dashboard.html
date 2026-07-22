@@ -75,6 +75,13 @@
   .detail-meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
   .val-badge { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13px; color: var(--red); }
+  .row-delete-btn {
+    background: none; border: 1.5px solid var(--midgrey); border-radius: 6px;
+    color: var(--muted); font-size: 12px; width: 26px; height: 26px; cursor: pointer;
+    line-height: 1; transition: all 0.15s;
+  }
+  .row-delete-btn:hover { border-color: var(--red); color: var(--red); background: rgba(226,35,26,0.06); }
+  .row-delete-btn:disabled { opacity: 0.4; cursor: default; }
   #statusMsg { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
   #statusMsg.error { color: var(--red); font-weight: 700; }
 
@@ -404,11 +411,12 @@ function renderDetail() {
   let rowsHtml = '';
   p.rows.forEach(r => {
     rowsHtml += `
-      <tr>
+      <tr data-row-id="${r.id}">
         <td>${r.category}</td>
         <td>${r.fact}</td>
         <td><span class="val-badge">${r.impact}</span></td>
         <td><span class="val-badge">${r.effort}</span></td>
+        <td><button class="row-delete-btn" title="Delete this answer">✕</button></td>
       </tr>
     `;
   });
@@ -430,7 +438,7 @@ function renderDetail() {
       <div class="mgrid-section-sub">Impact (vertical) × Effort (horizontal), this participant's own answers</div>
       ${quadrantSectionHtml(p.rows, false)}
       <table>
-        <thead><tr><th>Category</th><th>Brutal Fact</th><th>Impact</th><th>Effort</th></tr></thead>
+        <thead><tr><th>Category</th><th>Brutal Fact</th><th>Impact</th><th>Effort</th><th></th></tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table>
     </div>
@@ -440,7 +448,40 @@ function renderDetail() {
   document.getElementById('crumbParticipants').addEventListener('click', () => { currentView = 'participants'; render(); });
   document.getElementById('backBtn').addEventListener('click', () => { currentView = 'participants'; render(); });
   document.getElementById('exportOneBtn').addEventListener('click', () => exportToExcel(p.name));
+  document.querySelectorAll('.row-delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tr = btn.closest('tr');
+      deleteAnswer(tr.getAttribute('data-row-id'), tr);
+    });
+  });
   attachDotTooltips();
+}
+
+// Deletes a single answer row from Supabase by its primary key id, then
+// removes it from the local dataset and re-renders. Requires a DELETE
+// policy for the anon role on brutal_facts_scores in Supabase RLS.
+async function deleteAnswer(id, trEl) {
+  if (!confirm('Delete this answer? This cannot be undone.')) return;
+  const btn = trEl.querySelector('.row-delete-btn');
+  btn.disabled = true;
+  trEl.style.opacity = '0.4';
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/brutal_facts_scores?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'return=minimal'
+      }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    allRows = allRows.filter(r => String(r.id) !== String(id));
+    render();
+  } catch (err) {
+    btn.disabled = false;
+    trEl.style.opacity = '1';
+    alert("Couldn't delete: " + err.message + "\n\nIf this says permission denied, Supabase needs a DELETE policy for the anon role on brutal_facts_scores.");
+  }
 }
 
 function exportToExcel(onlyParticipant) {
