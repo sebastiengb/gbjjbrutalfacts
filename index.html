@@ -412,6 +412,7 @@ function render() {
   if (stepIndex === 0) renderIntro();
   else if (stepIndex <= CATEGORIES.length) renderSection();
   else renderThankYou();
+  window.scrollTo(0, 0);
 }
 
 render();

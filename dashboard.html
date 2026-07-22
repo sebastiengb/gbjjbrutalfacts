@@ -575,6 +575,7 @@ function render() {
   if (currentView === 'forms') renderForms();
   else if (currentView === 'participants') renderParticipants();
   else renderDetail();
+  window.scrollTo(0, 0);
 }
 
 loadData();
