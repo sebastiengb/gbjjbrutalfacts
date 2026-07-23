@@ -19,7 +19,7 @@
     --muted: #8a8a8a;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
+  html, body { margin: 0; padding: 0; overflow-anchor: none; }
   body {
     font-family: 'Inter', -apple-system, sans-serif;
     color: var(--charcoal);
@@ -576,6 +576,10 @@ function render() {
   else if (currentView === 'participants') renderParticipants();
   else renderDetail();
   window.scrollTo(0, 0);
+  requestAnimationFrame(() => {
+    window.scrollTo(0, 0);
+    requestAnimationFrame(() => window.scrollTo(0, 0));
+  });
 }
 
 loadData();

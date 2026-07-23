@@ -18,7 +18,7 @@
     --muted: #8a8a8a;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; height: 100%; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow-anchor: none; }
   body {
     font-family: 'Inter', -apple-system, sans-serif;
     color: var(--charcoal);
@@ -413,6 +413,10 @@ function render() {
   else if (stepIndex <= CATEGORIES.length) renderSection();
   else renderThankYou();
   window.scrollTo(0, 0);
+  requestAnimationFrame(() => {
+    window.scrollTo(0, 0);
+    requestAnimationFrame(() => window.scrollTo(0, 0));
+  });
 }
 
 render();
