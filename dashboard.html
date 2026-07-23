@@ -117,6 +117,12 @@
     z-index: 2;
   }
   .mgrid-dot:hover { transform: translate(-50%, -50%) scale(1.25); z-index: 3; }
+  .mgrid-dot-count {
+    position: absolute; top: -7px; right: -7px; min-width: 17px; height: 17px; padding: 0 3px;
+    border-radius: 9px; background: var(--charcoal); color: #fff; border: 2px solid white;
+    font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 10px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; z-index: 4;
+  }
   .mgrid-empty { font-size: 12px; color: var(--muted); padding: 40px 10px; text-align: center; }
 
   .section-answers-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -127,9 +133,12 @@
   .mgrid-tooltip {
     position: fixed; z-index: 9999; background: var(--charcoal); color: #fff;
     font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; line-height: 1.45;
-    padding: 9px 12px; border-radius: 8px; max-width: 240px; box-shadow: 0 8px 20px rgba(0,0,0,0.28);
+    padding: 9px 12px; border-radius: 8px; max-width: 280px; box-shadow: 0 8px 20px rgba(0,0,0,0.28);
     pointer-events: none; display: none; text-align: left;
   }
+  .mgrid-tooltip .tt-fact-list { margin: 0; padding-left: 16px; }
+  .mgrid-tooltip .tt-fact-list li { margin-bottom: 4px; }
+  .mgrid-tooltip .tt-fact-list li:last-child { margin-bottom: 0; }
   .mgrid-tooltip .tt-stats {
     display: block; margin-top: 5px; font-family: 'Archivo', sans-serif; font-weight: 800;
     color: #ff6b62; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em;
@@ -221,12 +230,28 @@ function sectionBlockHtml(catName, items) {
   if (items.length === 0) {
     return `<div class="section-block"><div class="section-block-title">${catName}</div><div class="mgrid-empty">No scores yet</div></div>`;
   }
-  const dots = items.map(it => {
-    const xPct = ((it.effort - 1) / 4) * 100;
-    const yPct = 100 - ((it.impact - 1) / 4) * 100;
-    const factSafe = it.factText.replace(/"/g, '&quot;');
-    const stats = `Impact ${it.impact} · Effort ${it.effort}`;
-    return `<div class="mgrid-dot" style="left:${xPct}%; top:${yPct}%;" data-fact="${factSafe}" data-stats="${stats}"></div>`;
+  // Group facts that land on the exact same Impact/Effort coordinate so they render
+  // as a single dot with a count badge, instead of silently stacking on top of each other.
+  const coordGroups = {};
+  const coordOrder = [];
+  items.forEach(it => {
+    const key = it.impact + '|' + it.effort;
+    if (!coordGroups[key]) {
+      coordGroups[key] = { impact: it.impact, effort: it.effort, facts: [] };
+      coordOrder.push(key);
+    }
+    coordGroups[key].facts.push(it.factText);
+  });
+  const dots = coordOrder.map(key => {
+    const g = coordGroups[key];
+    // Pad the usable area to 6%-94% (instead of 0%-100%) so dots at the extremes
+    // (e.g. Impact 5 / Effort 5) sit fully inside the box and clear of its rounded corners.
+    const xPct = 6 + ((g.effort - 1) / 4) * 88;
+    const yPct = 94 - ((g.impact - 1) / 4) * 88;
+    const factsSafe = g.facts.map(f => f.replace(/"/g, '&quot;')).join('|||');
+    const stats = `Impact ${g.impact} · Effort ${g.effort}`;
+    const countBadge = g.facts.length > 1 ? `<div class="mgrid-dot-count">${g.facts.length}</div>` : '';
+    return `<div class="mgrid-dot" style="left:${xPct}%; top:${yPct}%;" data-facts="${factsSafe}" data-stats="${stats}">${countBadge}</div>`;
   }).join('');
 
   const answerRows = items.map(it => `
@@ -296,7 +321,11 @@ function attachDotTooltips() {
   const tt = document.getElementById('sharedTooltip');
   document.querySelectorAll('.mgrid-dot').forEach(dot => {
     dot.addEventListener('mouseenter', () => {
-      tt.innerHTML = `${dot.getAttribute('data-fact')}<span class="tt-stats">${dot.getAttribute('data-stats')}</span>`;
+      const facts = dot.getAttribute('data-facts').split('|||');
+      const factsHtml = facts.length > 1
+        ? `<ul class="tt-fact-list">${facts.map(f => `<li>${f}</li>`).join('')}</ul>`
+        : facts[0];
+      tt.innerHTML = `${factsHtml}<span class="tt-stats">${dot.getAttribute('data-stats')}</span>`;
       tt.style.display = 'block';
       const dotRect = dot.getBoundingClientRect();
       const ttRect = tt.getBoundingClientRect();
